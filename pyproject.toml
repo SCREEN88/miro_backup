@@ -1,0 +1,22 @@
+[build-system]
+requires = ['poetry-core>=1.5.1']
+build-backend = 'poetry.core.masonry.api'
+
+[tool.poetry]
+name = 'miro_backup'
+version = '0.0.1'
+description = 'miro_backup'
+authors = ['Marinov Yuriy <y.marinov@hh.ru>']
+
+[tool.poetry.dependencies]
+python = '~=3.12'
+# конфиги
+cattrs = '23.2.3'
+miro-api = "^2.2.0"
+requests = "^2.32.3"
+
+
+
+[tool.black]
+line-length = 120
+skip-string-normalization = true
