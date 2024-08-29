@@ -4,6 +4,7 @@ import time
 import uuid
 from argparse import ArgumentParser, Namespace
 from functools import partial
+from itertools import batched
 
 import miro_api
 import requests
@@ -22,10 +23,10 @@ logger.setLevel(logging.DEBUG)
 
 METADATA_CSV_PATH = 'data/metadata.csv'
 
-def get_last_writen_offset():
-    with open(METADATA_CSV_PATH, 'rb') as csv_file:
-        num_limes = sum(1 for _ in csv_file)
-        return num_limes
+def get_failed_boards():
+    with open('data/failed_boards.csv', 'rb') as csv_file:
+        lines = [l.decode('UTF-8').rstrip() for l in csv_file]
+        return lines
 
 
 def main(parser_args: Namespace):
@@ -34,23 +35,28 @@ def main(parser_args: Namespace):
     offset = parser_args.offset
     limit = parser_args.limit
     total = limit
-    while offset < total:
-        miro_board_ids = parser_args.miro_board_ids
-        if miro_board_ids:
-            if len(miro_board_ids) > 50:
-                raise Exception('Number of miro_board_ids exceeds 50')
-            board_ids = CreateBoardExportRequest.from_dict({'boardIds': miro_board_ids})
-        else:
-            if parser_args.resume_from_last:
-                offset = get_last_writen_offset()
-            logger.info(f'Offset = {offset} - {limit}')
-            boards = run_request_with_retry(partial(m_api.get_boards, offset=str(offset), limit=str(limit)),
-                                            5, 20, 'Get Boards Data')
-            total = boards.total
-            offset += limit
+    all_failed_boards = get_failed_boards()
+    failed_boards = []
+    f_b = ['uXjVP-SRhcE=','o9J_l5EkypE=','o9J_lYJCwSc=','uXjVKT5ZuXY=','uXjVMbFEjGE=','uXjVMhgJ9-8=','uXjVMWsZJfs=','uXjVNGSmcR4=','uXjVNAbOTn4=','uXjVMZgVZQE=','uXjVNFZEbNw=','uXjVOEdJp_c=','uXjVOSk2sX4=', 'o9J_l70Ea54=','o9J_lYKzAU4=','o9J_l22DhTg=','uXjVKENPaT4=','uXjVKmrGFH0=','uXjVM0raekA=','uXjVMgF1wXs=','uXjVMKG5VS0=','uXjVMdM8bL8=','uXjVMFrXRbo=','uXjVM6GPDCg=','uXjVMYk0eOc=','uXjVNs_J-bA=','uXjVOcDNH10=','uXjVOI21jxE=','uXjVO9kw_ck=','uXjVP-sEp_c=','uXjVOnJQMy8=','uXjVOikH3OU=','uXjVP_a8S04=']
+    for failed_board in all_failed_boards:
+        if failed_board.split(',')[0] in f_b:
+            failed_boards.append(failed_board)
 
-            boards_info_dict = {board.id: board for board in boards.data}
-            board_ids = CreateBoardExportRequest.from_dict({'boardIds': list(boards_info_dict.keys())})
+    # while offset < total - parser_args.offset:
+    #     logger.info(f'Offset = {offset} - {limit}')
+    #     boards = run_request_with_retry(partial(m_api.get_boards, offset=str(offset), limit=str(limit)),
+    #                                     5, 20, 'Get Boards Data')
+    #     total = boards.total
+    #     offset += limit
+    #     for board in boards.data:
+    #         if board.id not in success_boards:
+    #             with open('data/failed_boards.csv', "a") as file:
+    #                 file.write(f'{board.id},{board.modified_at},{board.name}\n')
+
+    batched_boards = list(batched(failed_boards, parser_args.limit))
+    for batch in batched_boards:
+        boards_info_dict = {board.split(',')[0]: board for board in batch}
+        board_ids = CreateBoardExportRequest.from_dict({'boardIds': list(boards_info_dict.keys())})
 
         export = run_request_with_retry(partial(begin_export, board_ids, m_api, org_id),
                                         10, 10, 'Begin Boards Export')
@@ -83,7 +89,7 @@ def check_export_status(job_id, m_api, org_id):
 def download_exported_files(results, boards_info_dict):
     for result in results:
         board_id = result.board_id
-        board = boards_info_dict.get(board_id)
+        board = boards_info_dict.get(board_id).split(',')
         if result.status == 'SUCCESS':
             response = run_request_with_retry(partial(requests.get, result.export_link, stream=True),
                                               1, 10, 'Exported File Download')
@@ -93,7 +99,7 @@ def download_exported_files(results, boards_info_dict):
         else:
             logger.error(f'Board: "{board_id}" - failed to export. Error message: "{result.error_message}"')
         with open(METADATA_CSV_PATH, "a") as file:
-            file.write(f'{board_id}|{board.modified_at}|{board.name}|{result.status}\n')
+            file.write(f'{board_id}|{board[1]}|{board[2]}|{result.status}\n')
 
 
 def run_request_with_retry(request, delay, attempts, description: str):
