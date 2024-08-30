@@ -93,7 +93,7 @@ def download_exported_files(results, boards_info_dict):
         else:
             logger.error(f'Board: "{board_id}" - failed to export. Error message: "{result.error_message}"')
         with open(METADATA_CSV_PATH, "a") as file:
-            file.write(f'{board_id}|{board.modified_at}|{board.name}|{result.status}\n')
+            file.write(f'{board.id},{board.modified_at},{board.name},{board.owner.name},{result.status}\n')
 
 
 def run_request_with_retry(request, delay, attempts, description: str):
